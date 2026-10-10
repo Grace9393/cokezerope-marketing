@@ -57,17 +57,17 @@ import { MentionFeed } from "@/components/social/MentionFeed";
 // are the synthetic "AURUM GOLD" demo data.
 
 const DEFAULT_BRANDS = [
-  "Dior Forever cushion foundation",
-  "M.A.C cushion foundation",
-  "Laura Mercier cushion foundation",
+  "Coca-Cola Zero Sugar 可口可樂零卡",
+  "Pepsi Zero Sugar 百事可樂零卡",
+  "Sprite Zero 雪碧零卡",
 ];
 const DEMO_COMPETITOR_URL =
-  "https://www.momoshop.com.tw/search/searchShop.jsp?keyword=" + encodeURIComponent("氣墊粉餅");
+  "https://www.momoshop.com.tw/search/searchShop.jsp?keyword=" + encodeURIComponent("零卡可樂");
 const DEMO_QUESTION =
-  "What are Taiwan consumers saying about the leading cushion foundations (Dior, M.A.C, Laura Mercier), how does that line up with our AURUM GOLD Cushion Foundation sales, and what should marketing do this week?";
+  "What are Taiwan consumers saying about Coke Zero vs Pepsi Zero and Sprite Zero, how are they priced and promoted on momo, and what should our marketing do this week?";
 const STARTERS = [
-  "What are Taiwan consumers saying about Dior, M.A.C and Laura Mercier cushions?",
-  "Is cushion buzz backing our AURUM GOLD Cushion Foundation growth?",
+  "What are Taiwan consumers saying about Coke Zero vs Pepsi Zero?",
+  "Which zero-sugar drink is winning share of voice on Dcard and Instagram, and why?",
   "Write this week's marketing action brief (social + competitor prices)",
 ];
 
@@ -433,7 +433,7 @@ function MarketingPulse() {
         <CompetitorResource
           watchlist={approvals.watchlist}
           onRemoveWatch={approvals.removeFromWatchlist}
-          headerExtras={researchButton("Luxury cushion foundation")}
+          headerExtras={researchButton("Zero-sugar cola and soft drinks")}
         />
 
         {research.job && (
@@ -504,7 +504,15 @@ function MarketingPulse() {
         inputExtras={(setInput, disabled) => (
           <MicButton
             lang={voicePrefs.lang}
-            vocabulary={["Dior", "AURUM GOLD", "M.A.C", "Laura Mercier", "Dcard", "PTT", "momo"]}
+            vocabulary={[
+              "Coke Zero",
+              "Coca-Cola",
+              "Pepsi Zero",
+              "Sprite Zero",
+              "Dcard",
+              "PTT",
+              "momo",
+            ]}
             onTranscript={setInput}
             disabled={disabled}
           />

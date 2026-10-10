@@ -43,7 +43,7 @@ const MENTION_SCHEMA = {
             type: "array",
             items: { type: "string" },
             description:
-              "2-4 short English topic tags, 1-3 words each, e.g. 'long wear', 'oxidation', 'price', 'packaging'",
+              "2-4 short English topic tags, 1-3 words each, e.g. 'taste', 'price', 'packaging', 'sugar-free', 'long wear'",
           },
         },
         required: ["platform", "title", "snippet", "sentiment", "topics"],

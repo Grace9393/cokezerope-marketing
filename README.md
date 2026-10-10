@@ -127,7 +127,7 @@ Other commands: `bun run build` (Cloudflare Workers bundle in `.output/`), `bun 
 ## How to run the demo
 
 1. **Category view** (`/`): click **Run demo / 執行示範**. Ace queries the sales data like-for-like, scrapes a live momo search page, compares prices, writes a cited brief, proposes actions and reads the brief aloud. Click a citation chip to jump to the highlighted table row, then **Approve** a proposal.
-2. **Pulse** (`/v2`): click **Run demo**. That runs a live 3-brand social scan (about 1–2 min), then Ace in marketing mode, a cited brief and a **Gradium** read-aloud. Click a `SOCIAL ›` citation to jump to the post.
+2. **Pulse** (`/v2`): click **Run demo**. That runs a live 3-brand social scan (about 1–2 min; the default targets are **Coca-Cola Zero vs Pepsi Zero vs Sprite Zero**, and you can type any brands), then Ace in marketing mode, a cited brief and a **Gradium** read-aloud. Click a `SOCIAL ›` citation to jump to the post.
 3. **Demo mask:** pick **Cola 🥤**, **Pika ⚡** or **K-pop 🎤** in the header, or add `?mask=pika` to the URL. Every brand and product name on screen is re-skinned, while Ace keeps working on the real names.
 4. **Voice:** hold the mic button and ask a question. The transcript lands in the input box for review before sending.
 5. **Deep Research:** click **Deep research** on the competitor card. The background job takes about 10–25 min and returns a cited report.

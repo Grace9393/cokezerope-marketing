@@ -110,7 +110,7 @@ const TOOLS = [
         brands: {
           type: "array",
           items: { type: "string" },
-          description: "e.g. ['Dior Forever cushion', 'M.A.C cushion']",
+          description: "e.g. ['Coke Zero', 'Pepsi Zero Sugar']",
         },
         days: { type: "number", description: "Look-back window in days (default 90)" },
       },
@@ -149,9 +149,9 @@ function systemInstruction(req: AgentRequest, coverage: number, route: Route) {
   return [
     ...(req.mode === "marketing"
       ? [
-          "You are Ace, a marketing intelligence analyst for a luxury make-up brand in Taiwan (house lines such as AURUM GOLD, Stellaria, Soleil, Rouge A, Kiss Lab).",
-          "Each week the marketing team needs competitive analysis (retailer prices and promotions on momo, Sephora, Watsons) combined with social listening (Dcard, PTT, Instagram, Threads, YouTube) to decide campaigns and responses.",
-          "Link social buzz to sales data where useful (e.g. is buzz backing a product line's growth?). Cite social mentions by their 'SOCIAL › ...' ids and sales rows by their row ids.",
+          "You are Ace, a marketing intelligence analyst for consumer brands in Taiwan (the default demo tracks zero-sugar colas: Coke Zero vs Pepsi Zero and Sprite Zero).",
+          "Each week the marketing team needs competitive analysis (retailer prices and promotions on momo, PChome, Watsons, Carrefour) combined with social listening (Dcard, PTT, Instagram, Threads, YouTube) to decide campaigns and responses.",
+          "The dashboard sales data is a separate make-up demo dataset: only use it if the question is about it. Cite social mentions by their 'SOCIAL › ...' ids and sales rows by their row ids. Don't use compare_prices for non make-up products.",
         ]
       : [
           "You are Ace, an analyst for a make-up category manager at a beauty brand in Taiwan.",
