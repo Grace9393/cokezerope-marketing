@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { aiErrorMessage } from "@/lib/ai/gemini.server";
-import { jsonError, rateLimited } from "@/lib/ai/guard.server";
+import { jsonError, rateLimited, readLimited } from "@/lib/ai/guard.server";
 import { transcribe } from "@/lib/ai/voice.server";
 import type { VoiceLang } from "@/lib/ai/voices";
 
@@ -22,9 +22,13 @@ export const Route = createFileRoute("/api/stt")({
           .map((s) => s.trim())
           .filter((s) => s && s.length < 60)
           .slice(0, 80);
-        const wav = await request.arrayBuffer();
-        if (wav.byteLength < 1000) return jsonError("Recording too short.", 400);
-        if (wav.byteLength > MAX_WAV) return jsonError("Recording too long (max ~60 s).", 413);
+        const bytes = await readLimited(request, MAX_WAV);
+        if (!bytes) return jsonError("Recording too long (max ~60 s).", 413);
+        if (bytes.byteLength < 1000) return jsonError("Recording too short.", 400);
+        const wav = bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength,
+        ) as ArrayBuffer;
         try {
           return Response.json({ text: await transcribe(wav, lang, vocab) });
         } catch (e) {

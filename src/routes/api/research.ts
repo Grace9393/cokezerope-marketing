@@ -2,7 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { getGemini, aiErrorMessage } from "@/lib/ai/gemini.server";
 import { MODELS } from "@/lib/ai/models";
-import { jsonError, rateLimited, signHandle, verifyHandle } from "@/lib/ai/guard.server";
+import {
+  jsonError,
+  rateLimited,
+  signHandle,
+  verifyHandle,
+  readJsonLimited,
+} from "@/lib/ai/guard.server";
 
 const Start = z.object({
   action: z.literal("start"),
@@ -64,10 +70,11 @@ export const Route = createFileRoute("/api/research")({
       POST: async ({ request }) => {
         let raw: unknown;
         try {
-          raw = await request.json();
+          raw = await readJsonLimited(request);
         } catch {
           return jsonError("Invalid request.", 400);
         }
+        if (raw === null) return jsonError("Request too large.", 413);
         const client = getGemini();
         const cancel = Cancel.safeParse(raw);
         if (cancel.success) {

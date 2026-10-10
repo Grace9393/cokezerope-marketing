@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { aiErrorMessage } from "@/lib/ai/gemini.server";
-import { jsonError, rateLimited } from "@/lib/ai/guard.server";
+import { jsonError, rateLimited, readJsonLimited } from "@/lib/ai/guard.server";
 import { rewriteForVoice, synthesize } from "@/lib/ai/voice.server";
 
 const Body = z.object({
@@ -21,7 +21,9 @@ export const Route = createFileRoute("/api/tts")({
           return jsonError("Too many voice requests — try again later.", 429);
         let body: z.infer<typeof Body>;
         try {
-          body = Body.parse(await request.json());
+          const json = await readJsonLimited(request);
+          if (json === null) return jsonError("Request too large.", 413);
+          body = Body.parse(json);
         } catch {
           return jsonError("Invalid request.", 400);
         }

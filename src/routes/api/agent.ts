@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { runAgent } from "@/lib/agent/agent.server";
 import type { AgentEvent, AgentRequest } from "@/lib/agent/types";
-import { jsonError, rateLimited } from "@/lib/ai/guard.server";
+import { jsonError, rateLimited, readLimited } from "@/lib/ai/guard.server";
 
 const MAX_BODY = 2_000_000; // entries + optional screenshot
 
@@ -37,8 +37,9 @@ export const Route = createFileRoute("/api/agent")({
       POST: async ({ request }) => {
         if (rateLimited(request, "agent", 30))
           return jsonError("Too many requests — try again in a few minutes.", 429);
-        const raw = await request.text();
-        if (raw.length > MAX_BODY) return jsonError("Request too large.", 413);
+        const bytes = await readLimited(request, MAX_BODY);
+        if (!bytes) return jsonError("Request too large.", 413);
+        const raw = new TextDecoder().decode(bytes);
         let body: AgentRequest;
         try {
           body = RequestSchema.parse(JSON.parse(raw)) as AgentRequest;

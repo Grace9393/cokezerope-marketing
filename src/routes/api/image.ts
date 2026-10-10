@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { getGemini, aiErrorMessage } from "@/lib/ai/gemini.server";
 import { MODELS } from "@/lib/ai/models";
-import { jsonError, rateLimited } from "@/lib/ai/guard.server";
+import { jsonError, rateLimited, readJsonLimited } from "@/lib/ai/guard.server";
 
 const Body = z.object({
   title: z.string().trim().min(1).max(200),
@@ -20,7 +20,9 @@ export const Route = createFileRoute("/api/image")({
           return jsonError("Too many image requests — try again later.", 429);
         let body: z.infer<typeof Body>;
         try {
-          body = Body.parse(await request.json());
+          const json = await readJsonLimited(request);
+          if (json === null) return jsonError("Request too large.", 413);
+          body = Body.parse(json);
         } catch {
           return jsonError("Invalid request.", 400);
         }

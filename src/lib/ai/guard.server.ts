@@ -66,3 +66,41 @@ export async function verifyHandle(handle: string): Promise<string | null> {
   const id = handle.slice(0, dot);
   return (await signHandle(id)) === handle ? id : null;
 }
+
+/**
+ * Read a request body with a hard size cap: rejects early on Content-Length and
+ * stops streaming as soon as the running total passes `max` (a missing or
+ * false Content-Length header can't bypass it). Returns null when too large.
+ */
+export async function readLimited(request: Request, max: number): Promise<Uint8Array | null> {
+  const declared = Number(request.headers.get("content-length") ?? "NaN");
+  if (Number.isFinite(declared) && declared > max) return null;
+  if (!request.body) return new Uint8Array();
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
+  return out;
+}
+
+/** JSON body with a size cap; throws on invalid JSON, returns null when too large. */
+export async function readJsonLimited(request: Request, max = 64_000): Promise<unknown | null> {
+  const bytes = await readLimited(request, max);
+  if (!bytes) return null;
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
