@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "strategy_options": {
+    "push_sessions": false
+  },
+  "absolute_git_hook_path": true,
+  "checkpoints": {
+    "primary": {
+      "type": "git-refs"
+    }
+  }
+}
