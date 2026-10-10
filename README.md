@@ -1,6 +1,8 @@
 # CokeZerope Marketing
 
-> **Ace, an AI marketing analyst for beauty brands in Taiwan.** It explains why sales moved, checks competitor prices and social buzz live, and proposes this week's actions. A human approves every one. Gemini does the reasoning, Gradium does the voice.
+> **Ace, an AI marketing analyst for consumer brands in Taiwan (demo: Coke Zero vs Pepsi Zero and Sprite Zero).** It explains why sales moved, checks competitor prices and social buzz live, and proposes this week's actions. A human approves every one. Gemini does the reasoning, Gradium does the voice.
+
+▶️ **Demo video: https://youtu.be/HPQ6d0eSJB8**
 
 Built at **{Tech: Europe} Agentic AI Hack Zürich, 10 Oct 2026** (Google DeepMind × {Tech: Europe}). See [Built at the hackathon](#built-at-the-hackathon--disclosure).
 
@@ -42,7 +44,7 @@ Today that takes hours of spreadsheets, browser tabs and screenshots, and the nu
 
 ## Demo
 
-- 2-minute video: **[YouTube link: add after upload]**. Description with timestamps: [`docs/YOUTUBE_DESCRIPTION.md`](docs/YOUTUBE_DESCRIPTION.md)
+- 1:47 demo video: **[youtu.be/HPQ6d0eSJB8](https://youtu.be/HPQ6d0eSJB8)**. Description with timestamps: [`docs/YOUTUBE_DESCRIPTION.md`](docs/YOUTUBE_DESCRIPTION.md)
 - How the video was made: a real recorded run, **Gradium** narration, **Gemini Lyria 3.5** music and burned-in subtitles. See [`tools/demo-video/`](tools/demo-video/README.md).
 - Video script: [`docs/VIDEO_SCRIPT.md`](docs/VIDEO_SCRIPT.md). 5-minute pitch: [`docs/PITCH_5MIN.md`](docs/PITCH_5MIN.md)
 
