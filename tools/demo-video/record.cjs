@@ -1,12 +1,13 @@
-// Records a real run of CokeZerope Marketing with Playwright: v1 (Cola mask),
-// then v2 switching the demo mask to Pika and K-pop on camera. Logs step
-// markers for the edit and captures the real Gradium read-aloud audio.
+// Records a real run of CokeZerope Marketing with Playwright (take 3):
+// v1 Ace run (Cola demo mask) → Pulse Coke Zero social scan → Ace marketing
+// brief + Gradium read-aloud → Approve → Ace drafts a promo visual (Nano
+// Banana) that is only generated after Approve. Logs step markers for the edit.
 const { createRequire } = require("module");
 const fs = require("fs");
 const req = createRequire(
   process.env.PW_CORE_DIR
     ? require("path").join(process.env.PW_CORE_DIR, "package.json")
-    : __filename,
+    : require("path").join(process.cwd(), "node_modules", "playwright-core", "package.json"),
 );
 const { chromium } = req("playwright-core");
 
@@ -20,10 +21,13 @@ const mark = (name) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function waitDialog(page, re, timeout) {
+async function waitCount(page, re, n, timeout) {
   await page.waitForFunction(
-    (src) => new RegExp(src).test(document.querySelector("[role=dialog]")?.innerText ?? ""),
-    re.source,
+    ([src, count]) => {
+      const t = document.querySelector("[role=dialog]")?.innerText ?? "";
+      return (t.match(new RegExp(src, "g")) ?? []).length >= count;
+    },
+    [re.source, n],
     { timeout, polling: 1000 },
   );
 }
@@ -34,12 +38,6 @@ async function smoothScroll(page, dy, ms) {
     await page.mouse.wheel(0, dy / steps);
     await sleep(50);
   }
-}
-
-async function pickMask(page, label) {
-  await page.getByLabel("Demo mask: replace brand names").click();
-  await sleep(700);
-  await page.getByRole("option", { name: label }).click();
 }
 
 (async () => {
@@ -53,24 +51,22 @@ async function pickMask(page, label) {
       localStorage.setItem("dashboard-lang", "en");
       if (!sessionStorage.getItem("mask-init")) {
         localStorage.setItem("ace-demo-mask", "cola");
+        localStorage.removeItem("ace-watchlist");
+        localStorage.removeItem("ace-activity");
         sessionStorage.setItem("mask-init", "1");
       }
     } catch {}
   });
   const page = await context.newPage();
   const tts = [];
-  page.on("response", async (res) => {
-    if (!res.url().includes("/api/tts") || res.status() !== 200) return;
-    try {
-      const body = await res.body();
-      const text = JSON.parse(res.request().postData() ?? "{}").text ?? "";
-      const file = `voice/live_tts_${tts.length}.wav`;
-      fs.mkdirSync("voice", { recursive: true });
-      fs.writeFileSync(file, body);
-      tts.push({ file, text, t: (Date.now() - t0) / 1000 });
-      console.log("captured tts", file, body.length);
-    } catch (e) {
-      console.log("tts capture failed", e.message);
+  page.on("request", (r) => {
+    if (r.url().includes("/api/tts") && r.method() === "POST") {
+      try {
+        tts.push({
+          file: `voice/live_tts_${tts.length}.wav`,
+          text: JSON.parse(r.postData() ?? "{}").text ?? "",
+        });
+      } catch {}
     }
   });
   t0 = Date.now();
@@ -81,38 +77,35 @@ async function pickMask(page, label) {
   await sleep(2500);
   mark("v1");
   await page.mouse.move(250, 160, { steps: 20 });
-  await sleep(6000);
-  await smoothScroll(page, 300, 2000);
-  await sleep(2500);
-  await smoothScroll(page, -300, 1200);
-  await sleep(1000);
+  await sleep(5000);
+  await smoothScroll(page, 300, 1800);
+  await sleep(2000);
+  await smoothScroll(page, -300, 1000);
+  await sleep(800);
 
   // ---- v1: Ace multi-step run
   mark("ace_open");
   await page.getByRole("button", { name: /Ask Ace/ }).click();
-  await sleep(1800);
+  await sleep(1500);
   await page
     .getByRole("button", { name: /down vs 2025\?/ })
     .first()
     .click();
-  mark("agent_start");
-  await waitDialog(page, /tool calls|Error:/, 240000);
+  await waitCount(page, /tool calls|Error:/, 1, 240000);
   mark("agent_done");
-  await sleep(7000);
+  await sleep(6000);
   const chip = page.locator("[role=dialog] button", { hasText: "Cushion Foundation ›" }).first();
   const anyChip = page.locator("[role=dialog] button", { hasText: " › " }).first();
   mark("cite");
   await ((await chip.count()) ? chip : anyChip).click();
-  await sleep(5500);
+  await sleep(4500);
   mark("cite_done");
 
-  // ---- v2: switch mask to Pika on camera, then scan
+  // ---- Pulse: Coke Zero social scan
   await page.goto(BASE + "/v2", { waitUntil: "networkidle" });
   await sleep(2500);
   mark("v2");
-  await sleep(1200);
-  await pickMask(page, "Pika ⚡");
-  await sleep(2600);
+  await sleep(1500);
   mark("scan_start");
   await page.getByRole("button", { name: "Scan", exact: true }).click();
   await page.waitForFunction(
@@ -125,51 +118,73 @@ async function pickMask(page, label) {
   );
   mark("scan_done");
   await sleep(2500);
-  await smoothScroll(page, 330, 2500);
-  await sleep(3000);
-  // ---- switch to K-pop live: the whole page re-skins
-  mark("switch_kpop");
-  await page.mouse.move(1000, 30, { steps: 10 });
-  await pickMask(page, "K-pop 🎤");
+  await smoothScroll(page, 330, 2200);
   await sleep(3500);
-  await smoothScroll(page, 420, 2500);
+  await smoothScroll(page, 420, 2200);
   await sleep(3000);
-  await smoothScroll(page, -750, 1500);
-  await sleep(800);
+  await smoothScroll(page, -750, 1300);
+  await sleep(600);
   mark("tour_done");
 
-  // ---- v2: Ace marketing brief via Run demo (scan already done → asks with a live momo URL)
+  // ---- Ace marketing brief via Run demo (live momo search for 零卡可樂)
   await page.getByRole("button", { name: /Run demo/ }).click();
   mark("ace2_start");
-  await waitDialog(page, /tool calls|Error:/, 300000);
+  await waitCount(page, /tool calls|Error:/, 1, 300000);
   mark("ace2_done");
   for (let i = 0; i < 40 && tts.length === 0; i++) await sleep(500);
   mark("read");
-  await sleep(9000);
+  await sleep(8000);
 
-  // ---- human approval
+  // ---- approve one proposal
   mark("approve");
   const cards = page.locator("[role=dialog] .rounded-lg.border", { hasText: "Approve" });
-  let target = null;
   for (const label of ["Add to watchlist", "Flag price gap", "Export brief"]) {
     const c = cards.filter({ hasText: label }).first();
     if (await c.count()) {
-      target = c;
+      await c.scrollIntoViewIfNeeded();
+      await sleep(900);
+      await c.getByRole("button", { name: /Approve/ }).click();
       break;
     }
   }
-  if (target) {
-    await target.scrollIntoViewIfNeeded();
-    await sleep(1200);
-    await target.getByRole("button", { name: /Approve/ }).click();
+  await sleep(2500);
+  mark("approve_done");
+
+  // ---- Ace drafts a counter-promo visual; Nano Banana only runs after Approve
+  const box = page.locator("[role=dialog] textarea");
+  await box.click();
+  await box.fill("Draft a promo visual for a Coke Zero counter-campaign on momo this week.");
+  await sleep(900);
+  mark("visual_ask");
+  await box.press("Enter");
+  await waitCount(page, /tool calls|Error:/, 2, 240000);
+  mark("visual_proposed");
+  await sleep(1500);
+  const vcard = page
+    .locator("[role=dialog] .rounded-lg.border", { hasText: "Draft promo visual" })
+    .last();
+  if (await vcard.count()) {
+    await vcard.scrollIntoViewIfNeeded();
+    await sleep(1500);
+    mark("visual_approve");
+    await vcard.getByRole("button", { name: /Approve/ }).click();
+    await page
+      .waitForFunction(() => !!document.querySelector("[role=dialog] img[alt]"), null, {
+        timeout: 90000,
+        polling: 1000,
+      })
+      .catch(() => undefined);
+    mark("visual_shown");
+    await page
+      .locator("[role=dialog] img[alt]")
+      .last()
+      .scrollIntoViewIfNeeded()
+      .catch(() => undefined);
+    await sleep(5000);
+  } else {
+    mark("visual_approve");
+    mark("visual_shown");
   }
-  await sleep(3000);
-  await page.keyboard.press("Escape");
-  await sleep(1200);
-  const wl = page.getByText("Watchlist", { exact: true }).first();
-  if (await wl.count()) await wl.scrollIntoViewIfNeeded();
-  else await page.getByText("Live competitor resource").first().scrollIntoViewIfNeeded();
-  await sleep(4500);
   mark("end");
 
   const videoPath = await page.video().path();

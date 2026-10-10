@@ -28,9 +28,11 @@ export const Route = createFileRoute("/api/image")({
         }
         const textLang = body.lang === "zh" ? "Traditional Chinese (Taiwan)" : "English";
         const prompt =
-          `Design a clean e-commerce promotional banner (16:9) for a luxury make-up brand on a Taiwan retailer such as momo or Sephora TW. ` +
+          `Design a clean e-commerce promotional banner (16:9) for a Taiwan online retailer such as momo. ` +
           `Campaign: ${body.title}. Brief: ${body.details}. ` +
-          `Elegant gold and black luxury beauty aesthetic, product-focused, minimal text in ${textLang}, clearly readable. ` +
+          `Show only the product category named in the campaign and brief, and match its visual style to that category ` +
+          `(for example, a zero-sugar drink banner shows a chilled, sweating drink can or bottle with ice, fizz and any food pairing in the brief). ` +
+          `Do not add products from any other category. Product-focused, minimal text in ${textLang}, clearly readable. ` +
           `Do not use any real brand logos or trademarks. Mark it as a draft concept.`;
         try {
           const it = (await getGemini().interactions.create({
