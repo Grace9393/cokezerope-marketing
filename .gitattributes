@@ -1,0 +1,8 @@
+# Keep code LF on every OS so `bun run lint` (prettier) passes on Windows checkouts too.
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.cjs  text eol=lf
+*.mjs  text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
