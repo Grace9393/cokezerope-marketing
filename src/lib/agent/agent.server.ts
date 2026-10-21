@@ -1,6 +1,7 @@
 import type { Entry, Metric } from "@/lib/dashboard-data";
 import { getGemini, aiErrorMessage } from "@/lib/ai/gemini.server";
-import { MODELS } from "@/lib/ai/models";
+import { getOpenAI, getProvider, openAIErrorMessage } from "@/lib/ai/openai.server";
+import { MODELS, OPENAI_MODELS } from "@/lib/ai/models";
 import { isAllowedRetailer, scrapeCompetitorUrl } from "@/lib/competitor.server";
 import { scanForAgent, scanSocial } from "@/lib/social/social.server";
 import { queryDashboard, topMovers, comparePrices, collectEvidence, yearCoverage } from "./tools";
@@ -219,6 +220,217 @@ async function routeQuestion(req: AgentRequest): Promise<{ route: Route; steps: 
   return { route, steps: Array.isArray(parsed.steps) ? parsed.steps.slice(0, 4).map(String) : [] };
 }
 
+type ProviderCall = FnCall;
+type ProviderTurn = { id: string; calls: ProviderCall[] };
+
+/** Small boundary for the provider-specific router, tool turn and final brief calls. */
+interface AgentProvider {
+  route(req: AgentRequest): Promise<{ route: Route; steps: string[] }>;
+  start(sys: string, input: unknown): Promise<ProviderTurn>;
+  next(turn: ProviderTurn, results: unknown[], sys: string): Promise<ProviderTurn>;
+  brief(turn: ProviderTurn, sys: string, prompt: string): Promise<string>;
+}
+
+function createAgentProvider(provider: "gemini" | "openai"): AgentProvider {
+  if (provider === "gemini") {
+    return {
+      route: routeQuestion,
+      async start(sys, input) {
+        const it = (await getGemini().interactions.create({
+          model: MODELS.agent,
+          system_instruction: sys,
+          input: input as never,
+          tools: TOOLS,
+        } as never)) as unknown as { id: string; steps?: ProviderCall[] };
+        return { id: it.id, calls: (it.steps ?? []).filter((s) => s.type === "function_call") };
+      },
+      async next(turn, results, sys) {
+        const it = (await getGemini().interactions.create({
+          model: MODELS.agent,
+          system_instruction: sys,
+          previous_interaction_id: turn.id,
+          input: results,
+          tools: TOOLS,
+        } as never)) as unknown as { id: string; steps?: ProviderCall[] };
+        return { id: it.id, calls: (it.steps ?? []).filter((s) => s.type === "function_call") };
+      },
+      async brief(turn, sys, prompt) {
+        const it = (await getGemini().interactions.create({
+          model: MODELS.agent,
+          system_instruction: sys,
+          previous_interaction_id: turn.id,
+          input: prompt,
+          response_format: { type: "text", mime_type: "application/json", schema: BRIEF_SCHEMA },
+        } as never)) as unknown as { output_text?: string };
+        return it.output_text ?? "{}";
+      },
+    };
+  }
+
+  const openAITools = TOOLS.map((tool) => ({ ...tool, strict: false }));
+  const strictBriefSchema = {
+    type: "object",
+    properties: {
+      headline: { type: "string" },
+      findings: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            text: { type: "string" },
+            evidenceIds: { type: "array", items: { type: "string" } },
+          },
+          required: ["text", "evidenceIds"],
+          additionalProperties: false,
+        },
+      },
+      actions: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            type: { type: "string", enum: ACTION_TYPES },
+            title: { type: "string" },
+            details: { type: "string" },
+            evidenceIds: { type: "array", items: { type: "string" } },
+            payload: {
+              anyOf: [
+                {
+                  type: "object",
+                  properties: { url: { type: "string" } },
+                  required: [],
+                  additionalProperties: false,
+                },
+                { type: "null" },
+              ],
+            },
+          },
+          required: ["id", "type", "title", "details", "evidenceIds", "payload"],
+          additionalProperties: false,
+        },
+      },
+      spokenSummary: { type: "string" },
+      suggestDeepResearch: { type: "boolean" },
+    },
+    required: ["headline", "findings", "actions", "spokenSummary", "suggestDeepResearch"],
+    additionalProperties: false,
+  };
+  return {
+    async route(req) {
+      const langName = req.lang === "zh" ? "Traditional Chinese" : "English";
+      const response = await getOpenAI().responses.create({
+        model: OPENAI_MODELS.router,
+        input: `Classify this question from a make-up category manager and write a 2-4 step plan in ${langName}.\nlookup = one number or fact from the sales dashboard; analysis = explain a movement, compare, recommend actions or check competitors; research = needs fresh outside market research beyond the dashboard.\nTools available: query_dashboard, top_movers, scrape_competitor, compare_prices, scan_social (social listening), propose_action.\nQuestion: ${req.question}${req.image ? "\n(The user attached an image.)" : ""}`,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "route_plan",
+            strict: true,
+            schema: {
+              ...ROUTER_SCHEMA,
+              properties: {
+                route: ROUTER_SCHEMA.properties.route,
+                steps: ROUTER_SCHEMA.properties.steps,
+              },
+              required: ["route", "steps"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+      const parsed = JSON.parse(response.output_text || "{}");
+      const route: Route = ["lookup", "analysis", "research"].includes(parsed.route)
+        ? parsed.route
+        : "analysis";
+      return {
+        route,
+        steps: Array.isArray(parsed.steps) ? parsed.steps.slice(0, 4).map(String) : [],
+      };
+    },
+    async start(sys, input) {
+      const content =
+        typeof input === "string"
+          ? input
+          : (input as { text: string }[]).map((part) => part.text || "");
+      const userContent =
+        Array.isArray(input) && (input as { type: string }[]).some((part) => part.type === "image")
+          ? (input as { type: string; text?: string; data?: string; mime_type?: string }[]).map(
+              (part) =>
+                part.type === "image"
+                  ? {
+                      type: "input_image" as const,
+                      image_url: `data:${part.mime_type};base64,${part.data}`,
+                    }
+                  : { type: "input_text" as const, text: part.text ?? "" },
+            )
+          : String(content);
+      const response = await getOpenAI().responses.create({
+        model: OPENAI_MODELS.agent,
+        instructions: sys,
+        input: [{ role: "user", content: userContent as never }],
+        tools: openAITools as never,
+      });
+      return {
+        id: response.id,
+        calls: response.output
+          .filter((item) => item.type === "function_call")
+          .map((item) => ({
+            type: "function_call",
+            id: item.call_id,
+            name: item.name,
+            arguments: JSON.parse(item.arguments || "{}"),
+          })),
+      };
+    },
+    async next(turn, results, sys) {
+      const outputs = results.map((result) => {
+        const item = result as { call_id: string; result: { text: string }[] };
+        return {
+          type: "function_call_output" as const,
+          call_id: item.call_id,
+          output: item.result.map((part) => part.text).join("\n"),
+        };
+      });
+      const response = await getOpenAI().responses.create({
+        model: OPENAI_MODELS.agent,
+        instructions: sys,
+        previous_response_id: turn.id,
+        input: outputs,
+        tools: openAITools as never,
+      });
+      return {
+        id: response.id,
+        calls: response.output
+          .filter((item) => item.type === "function_call")
+          .map((item) => ({
+            type: "function_call",
+            id: item.call_id,
+            name: item.name,
+            arguments: JSON.parse(item.arguments || "{}"),
+          })),
+      };
+    },
+    async brief(turn, sys, prompt) {
+      const response = await getOpenAI().responses.create({
+        model: OPENAI_MODELS.agent,
+        previous_response_id: turn.id,
+        instructions: sys,
+        input: prompt,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "ace_brief",
+            strict: true,
+            schema: strictBriefSchema,
+          },
+        },
+      });
+      return response.output_text || "{}";
+    },
+  };
+}
+
 function summarize(name: string, result: unknown, lang: AgentRequest["lang"]): string {
   const r = result as Record<string, unknown>;
   const zh = lang === "zh";
@@ -296,10 +508,11 @@ export async function runAgent(req: AgentRequest, emit: (e: AgentEvent) => void)
   }
 
   try {
-    const { route, steps } = await routeQuestion(req);
+    const providerName = getProvider();
+    const provider = createAgentProvider(providerName);
+    const { route, steps } = await provider.route(req);
     emit({ type: "plan", route, steps });
 
-    const client = getGemini();
     const sys = systemInstruction(req, coverage, route);
     const history = req.history
       .slice(-4)
@@ -314,17 +527,10 @@ export async function runAgent(req: AgentRequest, emit: (e: AgentEvent) => void)
       : text;
 
     const maxRounds = route === "lookup" ? 3 : MAX_ROUNDS;
-    let interaction = (await client.interactions.create({
-      model: MODELS.agent,
-      system_instruction: sys,
-      input: firstInput,
-      tools: TOOLS,
-    } as never)) as unknown as { id: string; steps?: { type: string }[] };
+    let interaction = await provider.start(sys, firstInput);
 
     for (let round = 0; round < maxRounds; round++) {
-      const calls = (interaction.steps ?? []).filter(
-        (s) => s.type === "function_call",
-      ) as unknown as FnCall[];
+      const calls = interaction.calls;
       if (!calls.length) break;
       if (Date.now() - started > DEADLINE_MS) {
         emit({
@@ -389,28 +595,20 @@ export async function runAgent(req: AgentRequest, emit: (e: AgentEvent) => void)
           result: [{ type: "text", text: JSON.stringify(result) }],
         });
       }
-      interaction = (await client.interactions.create({
-        model: MODELS.agent,
-        system_instruction: sys,
-        previous_interaction_id: interaction.id,
-        input: results,
-        tools: TOOLS,
-      } as never)) as unknown as typeof interaction;
+      interaction = await provider.next(interaction, results, sys);
     }
 
     // Structured final brief, no tools.
     const langName = req.lang === "zh" ? "Traditional Chinese (Taiwan)" : "English";
-    const briefIt = (await client.interactions.create({
-      model: MODELS.agent,
-      system_instruction: sys,
-      previous_interaction_id: interaction.id,
-      input:
-        `Now write the final brief as JSON in ${langName}. headline: one sentence. findings: max 3, each citing evidenceIds copied exactly from tool results (empty if none). ` +
-        `spokenSummary: under 60 seconds when read aloud (max ~130 English words or ~220 Chinese characters), plain spoken sentences, no ids, no symbols, numbers rounded and spoken naturally.`,
-      response_format: { type: "text", mime_type: "application/json", schema: BRIEF_SCHEMA },
-    } as never)) as unknown as { output_text?: string };
+    const briefText = await provider.brief(
+      interaction,
+      sys,
 
-    const raw = JSON.parse(briefIt.output_text ?? "{}") as Partial<Brief>;
+      `Now write the final brief as JSON in ${langName}. headline: one sentence. findings: max 3, each citing evidenceIds copied exactly from tool results (empty if none). ` +
+        `spokenSummary: under 60 seconds when read aloud (max ~130 English words or ~220 Chinese characters), plain spoken sentences, no ids, no symbols, numbers rounded and spoken naturally.`,
+    );
+
+    const raw = JSON.parse(briefText ?? "{}") as Partial<Brief>;
     const known = (ids: unknown) =>
       Array.isArray(ids) ? ids.map(String).filter((id) => evidence.has(id)) : [];
     const brief: Brief = {
@@ -429,7 +627,7 @@ export async function runAgent(req: AgentRequest, emit: (e: AgentEvent) => void)
       elapsedMs: Date.now() - started,
     });
   } catch (e) {
-    emit({ type: "error", message: aiErrorMessage(e) });
+    emit({ type: "error", message: openAIErrorMessage(aiErrorMessage(e)) });
   }
 }
 
