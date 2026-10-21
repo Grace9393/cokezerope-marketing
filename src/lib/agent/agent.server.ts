@@ -200,6 +200,29 @@ const ROUTER_SCHEMA = {
   required: ["route", "steps"],
 };
 
+function withStrictObjects(schema: Record<string, unknown>): Record<string, unknown> {
+  const result = Object.fromEntries(
+    Object.entries(schema).map(([key, value]) => [
+      key,
+      Array.isArray(value)
+        ? value.map((item) =>
+            item && typeof item === "object" && !Array.isArray(item)
+              ? withStrictObjects(item as Record<string, unknown>)
+              : item,
+          )
+        : value && typeof value === "object"
+          ? withStrictObjects(value as Record<string, unknown>)
+          : value,
+    ]),
+  );
+  if (result.type === "object") {
+    const properties = result.properties as Record<string, unknown> | undefined;
+    result.required = Object.keys(properties ?? {});
+    result.additionalProperties = false;
+  }
+  return result;
+}
+
 async function routeQuestion(req: AgentRequest): Promise<{ route: Route; steps: string[] }> {
   const client = getGemini();
   const langName = req.lang === "zh" ? "Traditional Chinese" : "English";
@@ -268,54 +291,7 @@ function createAgentProvider(provider: "gemini" | "openai"): AgentProvider {
   }
 
   const openAITools = TOOLS.map((tool) => ({ ...tool, strict: false }));
-  const strictBriefSchema = {
-    type: "object",
-    properties: {
-      headline: { type: "string" },
-      findings: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            text: { type: "string" },
-            evidenceIds: { type: "array", items: { type: "string" } },
-          },
-          required: ["text", "evidenceIds"],
-          additionalProperties: false,
-        },
-      },
-      actions: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            type: { type: "string", enum: ACTION_TYPES },
-            title: { type: "string" },
-            details: { type: "string" },
-            evidenceIds: { type: "array", items: { type: "string" } },
-            payload: {
-              anyOf: [
-                {
-                  type: "object",
-                  properties: { url: { type: "string" } },
-                  required: [],
-                  additionalProperties: false,
-                },
-                { type: "null" },
-              ],
-            },
-          },
-          required: ["id", "type", "title", "details", "evidenceIds", "payload"],
-          additionalProperties: false,
-        },
-      },
-      spokenSummary: { type: "string" },
-      suggestDeepResearch: { type: "boolean" },
-    },
-    required: ["headline", "findings", "actions", "spokenSummary", "suggestDeepResearch"],
-    additionalProperties: false,
-  };
+  const strictBriefSchema = withStrictObjects(BRIEF_SCHEMA);
   return {
     async route(req) {
       const langName = req.lang === "zh" ? "Traditional Chinese" : "English";
@@ -327,15 +303,7 @@ function createAgentProvider(provider: "gemini" | "openai"): AgentProvider {
             type: "json_schema",
             name: "route_plan",
             strict: true,
-            schema: {
-              ...ROUTER_SCHEMA,
-              properties: {
-                route: ROUTER_SCHEMA.properties.route,
-                steps: ROUTER_SCHEMA.properties.steps,
-              },
-              required: ["route", "steps"],
-              additionalProperties: false,
-            },
+            schema: withStrictObjects(ROUTER_SCHEMA),
           },
         },
       });
