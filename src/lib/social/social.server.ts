@@ -1,5 +1,6 @@
 import { getGemini, aiErrorMessage } from "@/lib/ai/gemini.server";
-import { MODELS } from "@/lib/ai/models";
+import { getOpenAI, getProvider, openAIErrorMessage } from "@/lib/ai/openai.server";
+import { MODELS, OPENAI_MODELS } from "@/lib/ai/models";
 import {
   PLATFORM_DOMAINS,
   SOCIAL_PLATFORMS,
@@ -9,7 +10,7 @@ import {
   type SocialScan,
 } from "./types";
 
-// Live social listening with Gemini + Google Search grounding. One search per
+// Live social listening follows AI_PROVIDER. One search per
 // brand runs in parallel. Mentions are marked `verified` when their link is a
 // Google Search grounding link (or a domain Search cited) — the model is told
 // never to invent posts; unverified links are labelled as such in the UI.
@@ -74,6 +75,11 @@ function platformOf(raw: string, url: string | null): SocialPlatform {
 
 type Step = { type: string; content?: { annotations?: { url?: string; title?: string }[] }[] };
 
+type OpenAIResponse = {
+  output_text?: string;
+  output?: { content?: { annotations?: { type?: string; url?: string }[] }[] }[];
+};
+
 async function scanBrand(
   brand: string,
   brandNo: number,
@@ -81,25 +87,57 @@ async function scanBrand(
   days: number,
 ): Promise<{ mentions: Mention[]; cited: string[] }> {
   const sites = platforms.length ? platforms : [...SOCIAL_PLATFORMS];
-  const it = (await getGemini().interactions.create({
-    model: MODELS.agent,
-    input:
-      `Use Google Search to find real social media and forum posts from Taiwan in the last ${days} days that discuss: ${brand}. ` +
-      `Look on: ${sites.join(", ")} (Taiwan Chinese posts are expected — search in Traditional Chinese too). ` +
-      `Return up to 10 distinct posts you actually found in search results. For url, copy the link exactly as it appears in the search results (grounding redirect links are fine). ` +
-      `Never invent posts, URLs, dates or quotes; if you find fewer, return fewer. ` +
-      `Classify consumer sentiment toward ${brand} in that post and give 2-4 short English topic tags.`,
-    tools: [{ type: "google_search" }],
-    response_format: { type: "text", mime_type: "application/json", schema: MENTION_SCHEMA },
-  } as never)) as unknown as { output_text?: string | null; steps?: Step[] };
+  const provider = getProvider();
+  const prompt =
+    provider === "openai"
+      ? `Use web search to find real social media and forum posts from Taiwan in the last ${days} days that discuss: ${brand}. ` +
+        `Look on: ${sites.join(", ")} (Taiwan Chinese posts are expected — search in Traditional Chinese too). ` +
+        `Return up to 10 distinct posts you actually found in search results. For url, copy the post link exactly as provided. ` +
+        `Never invent posts, URLs, dates or quotes; if you find fewer, return fewer. ` +
+        `Classify consumer sentiment toward ${brand} in that post and give 2-4 short English topic tags. ` +
+        `Return only JSON matching {"mentions":[{"platform":string,"title":string,"snippet":string,"url":string,"date":string,"sentiment":"positive|neutral|negative","level":number,"topics":string[]]}.`
+      : `Use Google Search to find real social media and forum posts from Taiwan in the last ${days} days that discuss: ${brand}. ` +
+        `Look on: ${sites.join(", ")} (Taiwan Chinese posts are expected — search in Traditional Chinese too). ` +
+        `Return up to 10 distinct posts you actually found in search results. For url, copy the link exactly as it appears in the search results (grounding redirect links are fine). ` +
+        `Never invent posts, URLs, dates or quotes; if you find fewer, return fewer. ` +
+        `Classify consumer sentiment toward ${brand} in that post and give 2-4 short English topic tags.`;
+  const raw =
+    provider === "openai"
+      ? await getOpenAI().responses.create({
+          model: OPENAI_MODELS.agent,
+          input: prompt,
+          tools: [{ type: "web_search" }],
+          text: { format: { type: "json_object" } },
+        })
+      : await getGemini().interactions.create({
+          model: MODELS.agent,
+          input: prompt,
+          tools: [{ type: "google_search" }],
+          response_format: { type: "text", mime_type: "application/json", schema: MENTION_SCHEMA },
+        } as never);
+  const it = raw as unknown as {
+    output_text?: string | null;
+    steps?: Step[];
+    output?: OpenAIResponse["output"];
+  };
 
   const cited = new Set<string>();
-  for (const s of it.steps ?? [])
-    for (const c of s.content ?? [])
-      for (const a of c.annotations ?? []) {
-        const d = (a.title ?? "").toLowerCase().replace(/^www\./, "");
-        if (d.includes(".")) cited.add(d);
-      }
+  if (provider === "openai") {
+    for (const item of it.output ?? [])
+      for (const content of item.content ?? [])
+        for (const annotation of content.annotations ?? []) {
+          if (annotation.type !== "url_citation" || !annotation.url) continue;
+          const d = hostOf(annotation.url);
+          if (d) cited.add(d);
+        }
+  } else {
+    for (const s of it.steps ?? [])
+      for (const c of s.content ?? [])
+        for (const a of c.annotations ?? []) {
+          const d = (a.title ?? "").toLowerCase().replace(/^www\./, "");
+          if (d.includes(".")) cited.add(d);
+        }
+  }
 
   let parsed: { mentions?: Partial<Mention & { level: number }>[] } = {};
   try {
@@ -158,7 +196,13 @@ export async function scanSocial(input: {
   const cited = new Set<string>();
   results.forEach((r, i) => {
     if (r.status === "rejected") {
-      errors.push(`${brands[i]}: ${aiErrorMessage(r.reason)}`);
+      let message = aiErrorMessage(r.reason);
+      try {
+        if (getProvider() === "openai") message = openAIErrorMessage(r.reason);
+      } catch {
+        /* keep Gemini-safe error */
+      }
+      errors.push(`${brands[i]}: ${message}`);
       return;
     }
     r.value.cited.forEach((d) => cited.add(d));
