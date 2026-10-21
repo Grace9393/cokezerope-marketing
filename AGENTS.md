@@ -16,7 +16,7 @@ Instructions for coding agents (Codex) working in this repo.
 - `src/lib/agent/agent.server.ts` — Ace agent loop (router → tool loop → structured brief). NDJSON events streamed by `src/routes/api/agent.ts`.
 - `src/lib/agent/tools.ts` — pure, deterministic tools over dashboard data (`queryDashboard`, `topMovers`, `comparePrices`, `collectEvidence`). Provider-agnostic: do not add model calls here.
 - `src/lib/agent/types.ts` — shared client/server types (`AgentEvent`, `Brief`, `Proposal`). Do not change their shape; the UI depends on them.
-- `src/lib/competitor.server.ts`, `src/lib/social/social.server.ts` — live web scraping / social listening via the model's search tool. `src/lib/retailers.ts` (`isAllowedRetailer`) is the retailer allowlist.
+- `src/lib/competitor.server.ts`, `src/lib/social/social.server.ts` — live web scraping / social listening via the selected provider's search tool. These follow `AI_PROVIDER`; Gemini remains the default. Voice, Deep Research and image generation still require `GEMINI_API_KEY`. `src/lib/retailers.ts` (`isAllowedRetailer`) is the retailer allowlist.
 - `src/lib/ai/*` — model clients and IDs. `models.ts` is safe for the client; `*.server.ts` is server-only. `gemini.server.ts` (`getGemini`, `hasGemini`, `aiErrorMessage`) is the pattern to mirror for any new provider.
 - `src/routes/api/*` — server routes (agent, tts, stt, research, image, social).
 - `src/components/agent/ProposalCard.tsx` — Approve / Edit / Reject; an action runs only on an explicit Approve click.
