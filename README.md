@@ -107,9 +107,9 @@ The full design (prompts, tools, data flow, error handling, demo mask, synthetic
 
 ## Setup and install
 
-Set `AI_PROVIDER=gemini` (default) and `GEMINI_API_KEY`, or set `AI_PROVIDER=openai` and `OPENAI_API_KEY` to use the Responses API. Provider selection is read for each server request. The voice, deep research and image routes remain Gemini-specific.
+Set `AI_PROVIDER=gemini` (default) and `GEMINI_API_KEY`, or set `AI_PROVIDER=openai` and `OPENAI_API_KEY` to use the Responses API. Provider selection is read for each server request. `GEMINI_API_KEY` is also required for competitor scraping and social listening, which still use Gemini when `AI_PROVIDER=openai`. The voice, deep research and image routes remain Gemini-specific.
 
-Requirements: Node 20+ and [Bun](https://bun.sh) 1.x (`npm i -g bun`), a Gemini or OpenAI API key for the selected provider, and a Gradium API key for voice.
+Requirements: Node 20+ and [Bun](https://bun.sh) 1.x (`npm i -g bun`), the selected provider API key (and `GEMINI_API_KEY` for competitor scraping and social listening when using OpenAI), and a Gradium API key for voice.
 
 ```bash
 git clone https://github.com/Grace9393/cokezerope-marketing.git
