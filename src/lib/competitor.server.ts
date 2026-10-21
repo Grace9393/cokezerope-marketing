@@ -1,12 +1,13 @@
 import { getGemini, aiErrorMessage } from "@/lib/ai/gemini.server";
-import { MODELS } from "@/lib/ai/models";
+import { getOpenAI, getProvider, openAIErrorMessage } from "@/lib/ai/openai.server";
+import { MODELS, OPENAI_MODELS } from "@/lib/ai/models";
 import { isAllowedRetailer } from "@/lib/retailers";
 
 export { isAllowedRetailer };
 
 // Shared competitor scraper used by the CompetitorResource UI and the Ace agent.
-// Gemini only: URL context reads the page; Google Search fills in when the
-// retailer page is JS-rendered or blocked. Never invents products.
+// Provider follows AI_PROVIDER. Gemini can read page content directly; OpenAI
+// uses web search to find the requested listing. Never invents products.
 
 export type CompetitorProduct = {
   name: string;
@@ -29,7 +30,7 @@ export type CompetitorResult = {
   scrapedAt: string;
   products: CompetitorProduct[];
   sources?: string[];
-  method?: "url_context" | "google_search";
+  method?: "url_context" | "google_search" | "web_search";
   error?: string;
 };
 
@@ -80,6 +81,23 @@ type Step = {
   content?: { type: string; text?: string; annotations?: { type: string; url?: string }[] }[];
 };
 
+type OpenAIResponse = {
+  output_text?: string;
+  output?: {
+    type?: string;
+    content?: { type?: string; annotations?: { type?: string; url?: string }[] }[];
+  }[];
+};
+
+function collectOpenAISources(response: OpenAIResponse): string[] {
+  const urls = new Set<string>();
+  for (const item of response.output ?? [])
+    for (const content of item.content ?? [])
+      for (const annotation of content.annotations ?? [])
+        if (annotation.type === "url_citation" && annotation.url) urls.add(annotation.url);
+  return [...urls].slice(0, 8);
+}
+
 function collectSources(steps: Step[] | undefined): string[] {
   const urls = new Set<string>();
   for (const s of steps ?? []) {
@@ -117,6 +135,62 @@ export async function scrapeCompetitorUrl(rawUrl: string): Promise<CompetitorRes
   }
 
   try {
+    const provider = getProvider();
+    if (provider === "openai") {
+      const extract = async (searchPrompt: string) => {
+        const response = await getOpenAI().responses.create({
+          model: OPENAI_MODELS.agent,
+          input:
+            `${searchPrompt}\nReturn only JSON matching {"title":string,"pageReadable":boolean,"products":[{"name":string,"brand":string,"category":string,"price":number,"currency":string,"rating":number,"reviews":number,"promo":string}]}. ` +
+            `Include only products and current prices supported by sources; never invent prices. Set pageReadable=false because this provider is using web search rather than direct page access.`,
+          tools: [{ type: "web_search" }],
+          text: { format: { type: "json_object" } },
+        });
+        const result = response as OpenAIResponse;
+        let parsed: {
+          title?: string;
+          pageReadable?: boolean;
+          products?: Partial<CompetitorProduct>[];
+        } = {};
+        try {
+          parsed = JSON.parse(result.output_text ?? "{}");
+        } catch {
+          parsed = {};
+        }
+        return { parsed, sources: collectOpenAISources(result) };
+      };
+      let { parsed, sources } = await extract(
+        `Use web search to find the products and current prices listed on this retailer page: ${url}. Search within ${sourceName ?? "the retailer"}.`,
+      );
+      if (!parsed.products?.length)
+        ({ parsed, sources } = await extract(
+          `The listing at ${url} was not found directly. Search site:${sourceName} for products this page lists (decode any search keyword in the URL). Return current prices and promotions.`,
+        ));
+      const products: CompetitorProduct[] = (parsed.products ?? [])
+        .filter((p) => p && typeof p.name === "string" && p.name.trim())
+        .map((p) => ({
+          name: String(p.name).trim(),
+          brand: p.brand ?? null,
+          category: p.category ?? null,
+          price: typeof p.price === "number" ? p.price : null,
+          currency: p.currency ?? null,
+          rating: typeof p.rating === "number" ? p.rating : null,
+          reviews: typeof p.reviews === "number" ? p.reviews : null,
+          promo: p.promo ?? null,
+        }));
+      return {
+        ok: true,
+        url,
+        finalUrl: url,
+        title: parsed.title,
+        sourceName,
+        scrapedAt,
+        products,
+        sources,
+        method: "web_search",
+        error: products.length === 0 ? "No products detected on this page." : undefined,
+      };
+    }
     const client = getGemini();
     const extract = async (mode: "page" | "search") => {
       const instructions =
@@ -181,6 +255,13 @@ export async function scrapeCompetitorUrl(rawUrl: string): Promise<CompetitorRes
       error: products.length === 0 ? "No products detected on this page." : undefined,
     };
   } catch (e) {
-    return { ok: false, url, sourceName, scrapedAt, products: [], error: aiErrorMessage(e) };
+    const error = (() => {
+      try {
+        return getProvider() === "openai" ? openAIErrorMessage(e) : aiErrorMessage(e);
+      } catch {
+        return aiErrorMessage(e);
+      }
+    })();
+    return { ok: false, url, sourceName, scrapedAt, products: [], error };
   }
 }
