@@ -27,6 +27,10 @@ POST /api/agent (zod-validated, ≤2 MB, rate-limited)
   └─ errors → event "error" (key-redacted message), stream closes cleanly
 ```
 
+## Providers
+
+The Ace agent reads `AI_PROVIDER` per request (`gemini` by default, or `openai`). Gemini keeps the Interactions API path unchanged; OpenAI uses Responses API `previous_response_id` chaining, shared function tool definitions and matching `call_id` function outputs. Both paths share the same loop limits, tool executor, proposal-only actions, evidence collection and server-side citation filtering. The final OpenAI brief uses a strict JSON schema for `Brief`. Competitor scraping and social listening also continue to use Gemini, so `GEMINI_API_KEY` remains required when `AI_PROVIDER=openai`. Voice, Deep Research and image routes continue to use Gemini.
+
 **State.** Conversation state stays on the server: each turn passes `previous_interaction_id`, so thought signatures and earlier tool results don't have to be re-sent. The client keeps a short `history` (last 4 questions and headlines), the watchlist, the latest Deep Research report and, in v2, the latest social scan. These go into the system instruction as clearly delimited **untrusted** blocks.
 
 **Why the brief is a separate call.** Asking for JSON output while tools are enabled made the model keep calling tools (status `requires_action`). Running the loop first and then making one schema-constrained call without tools gave reliable JSON.

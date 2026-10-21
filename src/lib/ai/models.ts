@@ -14,3 +14,10 @@ export const MODELS = {
   /** Image understanding is done by the agent model; generation by Nano Banana. */
   image: "gemini-nano-banana-2.1",
 } as const;
+
+export const OPENAI_MODELS = {
+  /** Agent planning, tool use and reasoning. */
+  agent: "gpt-6.1-sol",
+  /** Cheap router and checks. */
+  router: "gpt-6-luna",
+} as const;

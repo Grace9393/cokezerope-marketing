@@ -1,6 +1,6 @@
 # CokeZerope Marketing
 
-> **Ace, an AI marketing analyst for consumer brands in Taiwan (demo: Coke Zero vs Pepsi Zero and Sprite Zero).** It explains why sales moved, checks competitor prices and social buzz live, and proposes this week's actions. A human approves every one. Gemini does the reasoning, Gradium does the voice.
+> **Ace, an AI marketing analyst for consumer brands in Taiwan (demo: Coke Zero vs Pepsi Zero and Sprite Zero).** It explains why sales moved, checks competitor prices and social buzz live, and proposes this week's actions. A human approves every one. Gemini is the default reasoning provider, with OpenAI Responses API as an option; Gradium does the voice.
 
 ▶️ **Demo video: https://youtu.be/HPQ6d0eSJB8**
 
@@ -54,8 +54,8 @@ Today that takes hours of spreadsheets, browser tabs and screenshots, and the nu
 
 ```mermaid
 flowchart LR
-  UI["Category view / Pulse<br/>+ Ace panel (React 19, TanStack Start)"] -->|"POST /api/agent · NDJSON stream"| R["Router<br/>gemini-3.5-flash-lite"]
-  R --> L["Agent loop · gemini-3.8-flash<br/>Interactions API function calling<br/>≤8 rounds · ≤20 calls · 150 s"]
+  UI["Category view / Pulse<br/>+ Ace panel (React 19, TanStack Start)"] -->|"POST /api/agent · NDJSON stream"| R["Router<br/>Gemini Flash-Lite / OpenAI GPT-6 Luna"]
+  R --> L["Agent loop · Gemini default / OpenAI Responses API<br/>Interactions / Responses function calling<br/>≤8 rounds · ≤20 calls · 150 s"]
   L --> T1["query_dashboard · top_movers<br/>(like-for-like YTD)"]
   L --> T2["scrape_competitor<br/>URL context + Google Search"]
   L --> T3["compare_prices"]
@@ -107,7 +107,9 @@ The full design (prompts, tools, data flow, error handling, demo mask, synthetic
 
 ## Setup and install
 
-Requirements: Node 20+ and [Bun](https://bun.sh) 1.x (`npm i -g bun`), a Gemini API key, and a Gradium API key.
+Set `AI_PROVIDER=gemini` (default) and `GEMINI_API_KEY`, or set `AI_PROVIDER=openai` and `OPENAI_API_KEY` to use the Responses API. Provider selection is read for each server request. `GEMINI_API_KEY` is also required for competitor scraping and social listening, which still use Gemini when `AI_PROVIDER=openai`. The voice, deep research and image routes remain Gemini-specific.
+
+Requirements: Node 20+ and [Bun](https://bun.sh) 1.x (`npm i -g bun`), the selected provider API key (and `GEMINI_API_KEY` for competitor scraping and social listening when using OpenAI), and a Gradium API key for voice.
 
 ```bash
 git clone https://github.com/Grace9393/cokezerope-marketing.git
@@ -120,8 +122,10 @@ bun run dev                 # http://localhost:8080
 `.env` (server-only, git-ignored, never `VITE_`-prefixed):
 
 ```dotenv
-GEMINI_API_KEY=your-gemini-key
-GRADIUM_API_KEY=your-gradium-key
+GEMINI_API_KEY=
+OPENAI_API_KEY=
+AI_PROVIDER=gemini
+GRADIUM_API_KEY=
 ```
 
 Other commands: `bun run build` (Cloudflare Workers bundle in `.output/`), `bun run lint`, and `python tools/synthetic-data/generate.py` (regenerates the synthetic dataset).
