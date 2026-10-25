@@ -199,7 +199,7 @@ export function CompetitorResource({
           </div>
 
           {result.error && <p className="text-xs text-muted-foreground">{result.error}</p>}
-          {result.method === "google_search" && (
+          {(result.method === "google_search" || result.method === "web_search") && (
             <p className="text-xs text-muted-foreground">{t("competitor.viaSearch")}</p>
           )}
           {result.sources && result.sources.length > 0 && (

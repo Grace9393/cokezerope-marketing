@@ -36,7 +36,7 @@ const zh: Dict = {
   "competitor.rating": "評分",
   "competitor.reviews": "評論數",
   "competitor.promo": "促銷",
-  "competitor.viaSearch": "頁面無法直接讀取，改以 Google 搜尋同一通路的商品資料。",
+  "competitor.viaSearch": "頁面無法直接讀取，改以網路搜尋同一通路的商品資料。",
   "competitor.enterValid": "請先輸入有效網址。",
   "competitor.scraped": "已從 {src} 擷取 {n} 項商品。",
   "competitor.couldNot": "無法擷取該頁面。",
@@ -198,7 +198,7 @@ const en: Dict = {
   "competitor.reviews": "Reviews",
   "competitor.promo": "Promo",
   "competitor.viaSearch":
-    "The page could not be read directly — products found via Google Search on the same retailer.",
+    "The page could not be read directly — products found via web search on the same retailer.",
   "competitor.enterValid": "Enter a valid URL first.",
   "competitor.scraped": "Scraped {n} product(s) from {src}.",
   "competitor.couldNot": "Could not scrape that page.",

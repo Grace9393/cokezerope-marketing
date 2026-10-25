@@ -13,6 +13,19 @@ export function hasOpenAI(): boolean {
   return Boolean(process.env.OPENAI_API_KEY);
 }
 
+/** Parse a JSON object from model text, including fenced or surrounding prose. */
+export function parseOpenAIJson<T>(text: string | null | undefined): T | undefined {
+  if (!text) return undefined;
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end < start) return undefined;
+  try {
+    return JSON.parse(text.slice(start, end + 1)) as T;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Resolve the provider for each request because Workers bind env per request. */
 export function getProvider(): AIProvider {
   const provider = process.env.AI_PROVIDER;
