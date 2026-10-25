@@ -38,3 +38,5 @@ dist-ssr
 
 # Lovable planning notes (internal)
 .lovable/plan.md
+
+__pycache__/
