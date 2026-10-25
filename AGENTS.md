@@ -31,7 +31,7 @@ Instructions for coding agents (Codex) working in this repo.
 6. **Demo mask is display-only.** Never apply it to data sent to the model.
 7. Small, reviewable diffs. No dependency upgrades unless the task needs them. Update `README.md` and `docs/TECHNICAL.md` when behaviour changes.
 
-## Model providers (target state — being added by the "Ace on OpenAI" task)
+## Model providers (current state)
 - `AI_PROVIDER=gemini` (default) uses `GEMINI_API_KEY`.
 - `AI_PROVIDER=openai` uses `OPENAI_API_KEY` with the OpenAI Responses API.
 - Model IDs live only in `src/lib/ai/models.ts`.
