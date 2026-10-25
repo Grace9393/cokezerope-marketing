@@ -1,5 +1,10 @@
 import { getGemini, aiErrorMessage } from "@/lib/ai/gemini.server";
-import { getOpenAI, getProvider, openAIErrorMessage } from "@/lib/ai/openai.server";
+import {
+  getOpenAI,
+  getProvider,
+  openAIErrorMessage,
+  parseOpenAIJson,
+} from "@/lib/ai/openai.server";
 import { MODELS, OPENAI_MODELS } from "@/lib/ai/models";
 import {
   PLATFORM_DOMAINS,
@@ -107,7 +112,6 @@ async function scanBrand(
           model: OPENAI_MODELS.agent,
           input: prompt,
           tools: [{ type: "web_search" }],
-          text: { format: { type: "json_object" } },
         })
       : await getGemini().interactions.create({
           model: MODELS.agent,
@@ -139,12 +143,19 @@ async function scanBrand(
         }
   }
 
-  let parsed: { mentions?: Partial<Mention & { level: number }>[] } = {};
-  try {
-    parsed = JSON.parse(it.output_text ?? "{}");
-  } catch {
-    parsed = {};
-  }
+  const parsed =
+    provider === "openai"
+      ? (parseOpenAIJson<{ mentions?: Partial<Mention & { level: number }>[] }>(it.output_text) ??
+        {})
+      : (() => {
+          try {
+            return JSON.parse(it.output_text ?? "{}") as {
+              mentions?: Partial<Mention & { level: number }>[];
+            };
+          } catch {
+            return {};
+          }
+        })();
 
   const mentions: Mention[] = (parsed.mentions ?? [])
     .filter((m) => m && m.snippet && m.title)

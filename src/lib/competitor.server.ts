@@ -1,5 +1,10 @@
 import { getGemini, aiErrorMessage } from "@/lib/ai/gemini.server";
-import { getOpenAI, getProvider, openAIErrorMessage } from "@/lib/ai/openai.server";
+import {
+  getOpenAI,
+  getProvider,
+  openAIErrorMessage,
+  parseOpenAIJson,
+} from "@/lib/ai/openai.server";
 import { MODELS, OPENAI_MODELS } from "@/lib/ai/models";
 import { isAllowedRetailer } from "@/lib/retailers";
 
@@ -144,19 +149,14 @@ export async function scrapeCompetitorUrl(rawUrl: string): Promise<CompetitorRes
             `${searchPrompt}\nReturn only JSON matching {"title":string,"pageReadable":boolean,"products":[{"name":string,"brand":string,"category":string,"price":number,"currency":string,"rating":number,"reviews":number,"promo":string}]}. ` +
             `Include only products and current prices supported by sources; never invent prices. Set pageReadable=false because this provider is using web search rather than direct page access.`,
           tools: [{ type: "web_search" }],
-          text: { format: { type: "json_object" } },
         });
         const result = response as OpenAIResponse;
-        let parsed: {
-          title?: string;
-          pageReadable?: boolean;
-          products?: Partial<CompetitorProduct>[];
-        } = {};
-        try {
-          parsed = JSON.parse(result.output_text ?? "{}");
-        } catch {
-          parsed = {};
-        }
+        const parsed =
+          parseOpenAIJson<{
+            title?: string;
+            pageReadable?: boolean;
+            products?: Partial<CompetitorProduct>[];
+          }>(result.output_text) ?? {};
         return { parsed, sources: collectOpenAISources(result) };
       };
       let { parsed, sources } = await extract(
